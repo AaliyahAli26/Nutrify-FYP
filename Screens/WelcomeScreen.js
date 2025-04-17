@@ -6,13 +6,13 @@ import {
   StyleSheet,
   ImageBackground,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+//import { useNavigation } from "@react-navigation/native";
 
 const WelcomeScreen = ({ navigation }) => {
   return (
     <ImageBackground
-      source={require("../assets/Background.jpg")} // Add your local image path here
-      style={styles.background} // Apply background styles
+      source={require("../assets/Background.jpg")}
+      style={styles.background}
     >
       <View style={styles.container}>
         <Text style={styles.title1}>Welcome To</Text>

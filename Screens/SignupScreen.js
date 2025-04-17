@@ -10,8 +10,9 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Profile from "../Entity/Users/Profile";
-//import Button from "../UI/Button";
+import { Firebase_auth, Firebase_db } from "../FirebaseConfig";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { setDoc, doc } from "firebase/firestore";
 
 const SignupScreen = ({ navigation }) => {
   const [username, setUsername] = useState("");
@@ -22,7 +23,7 @@ const SignupScreen = ({ navigation }) => {
   const [secureeText, setSecureeText] = useState(true);
   const [error, setError] = useState("");
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (
       !username.trim() ||
       !email.trim() ||
@@ -32,37 +33,30 @@ const SignupScreen = ({ navigation }) => {
       setError("All fields are required.");
       return;
     }
-
-    const existingUser = Profile.find((user) => user.username === username);
-    if (existingUser) {
-      setError("Usernanme is already taken.");
-      return;
-    }
-
-    const existingEmail = Profile.find((user) => user.UserEmail === email);
-    if (existingEmail) {
-      setError("Email is already registered.");
-      return;
-    }
-
     if (password !== confirm) {
       setError("Passwords do not match.");
       return;
     }
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        Firebase_auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
 
-    const newUser = {
-      username,
-      UserFirstname: "",
-      UserLastname: "",
-      UserEmail: email,
-      UserSupplementPreferences: [],
-      password,
-    };
+      await setDoc(doc(Firebase_db, "users", user.uid), {
+        username: username,
+        email: email,
+        uid: user.uid,
+      });
 
-    Profile.push(newUser);
+      Alert.alert("Sign Up Successful", `Welcome to Nutrify ${username}!`);
 
-    Alert.alert("Sign Up Successful");
-    navigation.navigate("StartingScreen", { user: newUser });
+      navigation.navigate("LoginScreen", { user: user });
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -178,7 +172,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     width: "100%",
-    flexDirection: "row", // Ensures consistency with password input
+    flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
@@ -196,7 +190,7 @@ const styles = StyleSheet.create({
   },
   emailContainer: {
     width: "100%",
-    flexDirection: "row", // Ensures consistency with password input
+    flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
     borderWidth: 1,

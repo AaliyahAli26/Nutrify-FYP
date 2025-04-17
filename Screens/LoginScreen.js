@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   StyleSheet,
@@ -10,28 +10,47 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Profile from "../Entity/Users/Profile";
-//import Button from "../UI/Button";
+import { Firebase_auth } from "../FirebaseConfig";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { getAuth, signOut } from "firebase/auth";
 
 const LoginScreen = ({ navigation }) => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureText, setSecureText] = useState(true);
   const [error, setError] = useState("");
+  const auth = Firebase_auth;
 
-  const handleLogin = () => {
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter correct username and password.");
+  useEffect(() => {
+    const authInstance = getAuth();
+    signOut(authInstance)
+      .then(() => console.log("User logged out on startup"))
+      .catch((error) => console.error("Error signing out: ", error));
+  }, []);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter correct email and password.");
       return;
     }
 
-    const user = Profile.find((user) => user.username === username);
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
 
-    if (user && user.password === password) {
-      setError("");
-      Alert.alert("Login Successful", `Welcome back, ${user.UserFirstname}!`),
-        navigation.navigate("AddReminderScreen", { user });
-    } else {
+      await AsyncStorage.removeItem("user");
+
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+
+      Alert.alert("Login Successful", `Welcome back, ${user.email}!`),
+        navigation.replace("AddReminderScreen", { user });
+    } catch (err) {
       setError("Invalid email or password.");
     }
   };
@@ -48,10 +67,11 @@ const LoginScreen = ({ navigation }) => {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Username"
-              value={username}
-              onChangeText={setUsername}
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
           </View>
           <View style={styles.passwordContainer}>

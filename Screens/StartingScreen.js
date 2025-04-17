@@ -46,8 +46,8 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   logo: {
-    position: "absolute", // Fix position at the top
-    top: 150, // Adjust the distance from the top
+    position: "absolute",
+    top: 150,
     alignItems: "center",
     width: "100%",
   },
