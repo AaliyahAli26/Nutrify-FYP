@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,33 +6,85 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
+  Alert,
+  Keyboard,
+  ScrollView,
 } from "react-native";
+import { RefillContext } from "../Entity/Services/RefillContext";
+import { useSupplements } from "../Entity/Services/SupplementContext";
+import { getAuth } from "firebase/auth";
+import styles from "../Layout/AlmostDoneScreenStyles";
 
 const AlmostDoneScreen = ({ route, navigation }) => {
-  const { supplementName, onSaveRefillData, time } = route.params || {};
+  const { supplementName, time, onSaveRefillData } = route.params || {};
   const [currentQuantity, setCurrentQuantity] = useState("");
   const [alertQuantity, setAlertQuantity] = useState("");
-  //const { supplementName, onSaveRefillData } = route.params;
-  const handleSave = () => {
+  const { addRefillData } = useContext(RefillContext);
+  const Firebase_auth = getAuth();
+
+  const validateInputs = () => {
+    if (!currentQuantity || !alertQuantity) {
+      Alert.alert("Missing Information", "Please fill in all fields");
+      return false;
+    }
+
+    const numCurrent = parseInt(currentQuantity);
+    const numAlert = parseInt(alertQuantity);
+
+    if (isNaN(numCurrent) || isNaN(numAlert)) {
+      Alert.alert("Invalid Input", "Please enter valid numbers");
+      return false;
+    }
+
+    if (numCurrent <= 0 || numAlert <= 0) {
+      Alert.alert("Invalid Quantity", "Quantities must be greater than 0");
+      return false;
+    }
+
+    if (numAlert >= numCurrent) {
+      Alert.alert(
+        "Invalid Alert Quantity",
+        "Alert quantity should be less than current quantity"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    Keyboard.dismiss();
+    if (!validateInputs()) return;
+
+    const numCurrent = parseInt(currentQuantity);
+    const numAlert = parseInt(alertQuantity);
+
+    const refillData = {
+      supplementName,
+      currentQuantity: numCurrent,
+      alertQuantity: numAlert,
+      time,
+    };
+
+    addRefillData(refillData);
+
     if (onSaveRefillData) {
-      onSaveRefillData({
-        currentQuantity,
-        alertQuantity,
+      onSaveRefillData(refillData);
+      navigation.goBack();
+    } else {
+      navigation.navigate("SuccessScreen", {
+        supplementName,
+        time,
+        refillData,
       });
     }
-    navigation.navigate("SuccessScreen", {
-      supplementName,
-      time: route.params.time,
-      refillData: {
-        currentQuantity,
-        alertQuantity,
-      },
-    });
-    navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
@@ -42,113 +94,51 @@ const AlmostDoneScreen = ({ route, navigation }) => {
 
       <Image
         source={require("../assets/fyp11.png")}
-        style={styles.SuppIconImage}
+        style={styles.suppIconImage}
+        resizeMode="contain"
       />
 
       <Text style={styles.heading}>{supplementName}</Text>
       <Text style={styles.subheading}>Add refill information:</Text>
 
-      <View style={styles.inputContainer}>
-        <Text>How many supplements do you have left?</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          placeholder="Enter quantity"
-          value={currentQuantity}
-          onChangeText={setCurrentQuantity}
-        />
+      <View style={styles.inputWrapper}>
+        <Text style={styles.inputLabel}>Current quantity remaining</Text>
+        <View style={styles.inputBoxContainer}>
+          <TextInput
+            style={styles.numberInput}
+            keyboardType="numeric"
+            placeholder="30"
+            value={currentQuantity}
+            onChangeText={setCurrentQuantity}
+            autoFocus={true}
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+        </View>
       </View>
 
-      <View style={styles.inputContainer}>
-        <Text>Remind me when I have:</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          placeholder="Enter quantity"
-          value={alertQuantity}
-          onChangeText={setAlertQuantity}
-        />
+      <View style={styles.inputWrapper}>
+        <Text style={styles.inputLabel}>Alert when quantity reaches</Text>
+        <View style={styles.inputBoxContainer}>
+          <TextInput
+            style={styles.numberInput}
+            keyboardType="numeric"
+            placeholder="10"
+            value={alertQuantity}
+            onChangeText={setAlertQuantity}
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+        </View>
       </View>
 
       <TouchableOpacity
         style={styles.saveButton}
         onPress={handleSave}
-        // onPress={() => navigation.navigate("ConfirmScreen")}
+        activeOpacity={0.8}
       >
-        <Text style={styles.saveButtonText}>Save</Text>
+        <Text style={styles.saveButtonText}>Save Reminders</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
 export default AlmostDoneScreen;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#B8F0ED",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  backText: {
-    alignSelf: "flex-start",
-    fontSize: 18,
-    color: "black",
-    marginTop: 40,
-    marginLeft: 20,
-  },
-  SuppIconImage: {
-    width: 150,
-    height: 150,
-    resizeMode: "contain",
-    marginBottom: 20,
-    marginTop: 40,
-  },
-  heading: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  subheading: {
-    fontSize: 18,
-    color: "#333",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  inputContainer: {
-    width: "90%",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  input: {
-    fontSize: 16,
-    color: "#000",
-    borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    paddingBottom: 5,
-    marginTop: 5,
-  },
-  saveButton: {
-    backgroundColor: "teal",
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    marginTop: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  saveButtonText: {
-    color: "white",
-    fontSize: 20,
-  },
-});

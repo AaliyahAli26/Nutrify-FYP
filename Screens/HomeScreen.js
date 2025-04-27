@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,250 +7,438 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Animated,
-  PanResponder,
-  Dimensions,
+  Alert,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
-import { useSupplements } from "./Services/SupplementContext";
-
-const { width } = Dimensions.get("window");
-const ACTION_WIDTH = width * 0.3;
+import { useSupplements } from "../Entity/Services/SupplementContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getDoc, doc } from "firebase/firestore";
+import { Firebase_auth, Firebase_db } from "../FirebaseConfig";
+import styles from "../Layout/HomeScreenStyles";
 
 const HomeScreen = ({ navigation, route }) => {
   const [currentTime] = useState(new Date());
-  const { supplements, setSupplements } = useSupplements();
+  const {
+    supplements,
+    setSupplements,
+    loadSupplements,
+    setUserId: setContextUserId,
+  } = useSupplements();
+
+  const [userId, setUserId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toDateString());
+
+  const generateId = useCallback(() => {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  }, []);
 
   useEffect(() => {
-    const loadSupplements = async () => {
+    const loadSupplementsFromStorage = async () => {
       try {
-        const saved = await AsyncStorage.getItem("supplements");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const withSwipes = parsed.map((supp) => ({
-            ...supp,
-            taken: supp.taken || false,
-            swipeValue: new Animated.Value(0),
-          }));
-          setSupplements(withSwipes);
+        const data = await AsyncStorage.getItem(`supplements_${userId}`);
+        if (data) {
+          setSupplements(JSON.parse(data));
         }
       } catch (e) {
         console.error("Failed to load supplements", e);
       }
     };
 
-    loadSupplements();
-    const unsubscribe = navigation.addListener("focus", loadSupplements);
-    return unsubscribe;
-  }, [navigation]);
+    if (userId) {
+      loadSupplementsFromStorage();
+    }
+  }, [userId]);
 
   useEffect(() => {
-    if (route.params?.newSupplement) {
-      const newSupp = {
-        ...route.params.newSupplement,
-        id: Date.now().toString(),
-        swipeValue: new Animated.Value(0),
-        taken: false,
-      };
-      const updated = [...supplements, newSupp];
-      setSupplements(updated);
-      AsyncStorage.setItem("supplements", JSON.stringify(updated));
-    }
-  }, [route.params?.newSupplement]);
+    const fetchUserInfo = async () => {
+      try {
+        const user = Firebase_auth.currentUser;
 
-  const handleStatusChange = (id, status) => {
-    const updated = supplements.map((supp) => {
-      if (supp.id === id) {
-        Animated.spring(supp.swipeValue, {
-          toValue: 0,
-          useNativeDriver: false,
-        }).start();
+        if (user) {
+          console.log("Logged in as:", user.uid);
+          setUserId(user.uid);
+          setContextUserId(user.uid);
+          await loadSupplements(user.uid);
 
-        const updatedSupp = { ...supp, taken: status === "taken" };
-        AsyncStorage.getItem("supplements").then((saved) => {
-          const parsed = saved ? JSON.parse(saved) : [];
-          const updatedStore = parsed.map((s) =>
-            s.id === id ? updatedSupp : s
-          );
-          AsyncStorage.setItem("supplements", JSON.stringify(updatedStore));
-        });
+          const userDocRef = doc(Firebase_db, "users", user.uid);
+          const userDoc = await getDoc(userDocRef);
 
-        return updatedSupp;
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUsername(userData.username);
+          }
+        } else {
+          console.log("No user is logged in");
+          setUserId(null);
+          setSupplements([]);
+        }
+      } catch (error) {
+        console.error("Error fetching user info:", error);
+      } finally {
+        setLoading(false);
       }
-      return supp;
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      if (userId) {
+        loadSupplements(userId);
+      }
     });
-    setSupplements(updated);
+    return unsubscribe;
+  }, [navigation, loadSupplements, userId]);
+
+  const getCurrentTime = () => {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const createPanResponder = (supplement) =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (e, gesture) => {
-        if (gesture.dx < 0) {
-          supplement.swipeValue.setValue(gesture.dx);
-        }
-      },
-      onPanResponderRelease: (e, gesture) => {
-        const toValue = gesture.dx < -ACTION_WIDTH / 2 ? -ACTION_WIDTH : 0;
-        Animated.spring(supplement.swipeValue, {
-          toValue,
-          useNativeDriver: false,
-        }).start();
-      },
-    });
+  const handleStatusChange = async (id, status) => {
+    try {
+      console.log(
+        "Before update:",
+        JSON.stringify(supplements.find((s) => s.id === id))
+      );
 
-  const getCurrentWeekDates = () => {
+      const today = new Date().toDateString();
+
+      const updatedSupplements = supplements.map((supp) => {
+        if (supp.id !== id) return supp;
+
+        // Create updated supplement
+        const updated = {
+          ...supp,
+          taken: status === "taken",
+          takenAt: status === "taken" ? getCurrentTime() : null,
+        };
+
+        // Only process if taken and has refillData
+        if (status === "taken" && supp.refillData) {
+          const newQty = supp.refillData.currentQuantity - 1;
+          updated.refillData = {
+            ...supp.refillData,
+            currentQuantity: newQty,
+          };
+
+          console.log(
+            `Reduced ${supp.name} from ${supp.refillData.currentQuantity} to ${newQty}`
+          );
+
+          // Check for alert condition
+          if (newQty <= supp.refillData.alertQuantity) {
+            // Changed to <= for safety
+            Alert.alert(
+              `🛒 Low Stock: ${supp.name}`,
+              `Only ${newQty} left! Time to reorder.`,
+              [{ text: "OK" }]
+            );
+          }
+        }
+
+        // Add history entry for this supplement
+        const historyEntry = {
+          date: today,
+          status: status,
+          time: status === "taken" ? getCurrentTime() : null,
+        };
+
+        // Update history if available or create a new one
+        updated.history = [...(supp.history || []), historyEntry];
+
+        return updated;
+      });
+
+      // Save to storage
+      await AsyncStorage.setItem(
+        `supplements_${userId}`,
+        JSON.stringify(updatedSupplements)
+      );
+
+      // Update state
+      setSupplements(updatedSupplements);
+
+      console.log(
+        "After update:",
+        JSON.stringify(updatedSupplements.find((s) => s.id === id))
+      );
+    } catch (e) {
+      console.error("Error updating supplement:", e);
+      Alert.alert("Error", "Failed to update supplement status");
+    }
+  };
+
+  const handleSnooze = async (id) => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission required",
+          "Please enable notifications to snooze reminders"
+        );
+        return;
+      }
+
+      const supplement = supplements.find((supp) => supp.id === id);
+      if (!supplement) return;
+
+      const snoozeTime = new Date(Date.now() + 10 * 60 * 1000);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `💊 Reminder: ${supplement.name}`,
+          body: `Time to take your ${supplement.dosage} supplement(s)!`,
+          sound: true,
+          data: { supplementId: id },
+        },
+        trigger: snoozeTime,
+      });
+
+      Alert.alert("😴 Snoozed", "We'll remind you again in 10 minutes!");
+    } catch (error) {
+      console.error("Failed to snooze notification", error);
+    }
+  };
+
+  const handleSkip = (id) => {
+    Alert.alert(
+      "💊Skip Dose?",
+      "🤨Are you sure you want to skip this dose? 😤Rebellious, aren't we? ⏭️Skipping like it's a Netflix recap...",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Snooze 10 min", onPress: () => handleSnooze(id) },
+        {
+          text: "Skip Anyway",
+          onPress: () => handleStatusChange(id, "skipped"),
+        },
+      ]
+    );
+  };
+
+  const handleClearAll = async () => {
+    Alert.alert(
+      "Clear All Supplements?",
+      "Are you sure you want to clear today's supplements?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSupplements([]);
+              await AsyncStorage.setItem(
+                `supplements_${userId}`,
+                JSON.stringify([])
+              );
+            } catch (e) {
+              console.error("Failed to clear supplements", e);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getCurrentWeekDates = useCallback(() => {
     const today = new Date();
     const day = today.getDay();
     const start = new Date(today);
     start.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
-
     return [...Array(7)].map((_, i) => {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       return d;
     });
-  };
+  }, []);
 
   const weekDates = getCurrentWeekDates();
   const today = new Date();
   const formattedDate = currentTime.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
     day: "numeric",
+    month: "short",
   });
+
+  const validSupplements = supplements.filter(
+    (supp) => supp.id && supp.name && supp.dosage
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
+        {/* Header Section */}
         <View style={styles.headerContainer}>
           <View style={styles.profileContainer}>
             <Image
               source={require("../assets/avatar.png")}
               style={styles.profileAvatar}
             />
-            <Text style={styles.guestText}>Aaliyah</Text>
+            <Text style={styles.guestText}>{username}</Text>
           </View>
         </View>
 
+        {/* Enhanced Calendar Section */}
         <View style={styles.calendarContainer}>
-          {weekDates.map((date, i) => {
-            const isToday = date.toDateString() === today.toDateString();
-            return (
-              <View key={i} style={styles.dayContainer}>
-                <Text style={styles.dayText}>
-                  {date.toLocaleDateString("en-US", { weekday: "short" })}
-                </Text>
-                <View
+          <View style={styles.weekDaysContainer}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+              <Text key={`weekday-${index}`} style={styles.weekDayText}>
+                {day}
+              </Text>
+            ))}
+          </View>
+          <View style={styles.datesContainer}>
+            {weekDates.map((date) => {
+              const dateStr = date.toDateString();
+              const isToday = dateStr === new Date().toDateString();
+              const isSelected = dateStr === selectedDate;
+
+              const dayStats = validSupplements.reduce((stats, supp) => {
+                supp.history?.forEach((entry) => {
+                  if (entry.date === dateStr) {
+                    stats[entry.status] = (stats[entry.status] || 0) + 1;
+                  }
+                });
+                return stats;
+              }, {});
+
+              return (
+                <TouchableOpacity
+                  key={`date-${date.getTime()}`}
                   style={[
                     styles.dateContainer,
-                    isToday && styles.currentDateContainer,
+                    isToday && styles.todayDateContainer,
+                    isSelected && styles.selectedDateContainer,
                   ]}
+                  onPress={() => setSelectedDate(dateStr)}
                 >
                   <Text
                     style={[
-                      styles.dateNumber,
-                      isToday && styles.currentDateText,
+                      styles.dateText,
+                      isToday && styles.todayDateText,
+                      isSelected && styles.selectedDateText,
                     ]}
                   >
                     {date.getDate()}
                   </Text>
-                </View>
-              </View>
-            );
-          })}
+
+                  {dayStats.taken > 0 && <View style={styles.takenIndicator} />}
+                  {dayStats.skipped > 0 && (
+                    <View style={styles.skippedIndicator} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
+        {/* Date History Section */}
+        <View style={styles.historyContainer}>
+          <Text style={styles.historyTitle}>
+            {selectedDate === new Date().toDateString()
+              ? "Today's Activity"
+              : `Activity on ${new Date(selectedDate).toLocaleDateString()}`}
+          </Text>
+
+          {validSupplements
+            .filter((supp) =>
+              supp.history?.some((entry) => entry.date === selectedDate)
+            )
+            .map((supp) => {
+              const dayEntries = supp.history.filter(
+                (entry) => entry.date === selectedDate
+              );
+
+              return (
+                <View key={`history-${supp.id}`} style={styles.historyItem}>
+                  <Text style={styles.historySupplement}>{supp.name}</Text>
+                  {dayEntries.map((entry, i) => (
+                    <Text
+                      key={`entry-${i}`}
+                      style={[
+                        styles.historyEntry,
+                        entry.status === "taken"
+                          ? styles.historyTaken
+                          : styles.historySkipped,
+                      ]}
+                    >
+                      {entry.status === "taken"
+                        ? `✓ Taken at ${entry.time}`
+                        : "✗ Skipped"}
+                    </Text>
+                  ))}
+                </View>
+              );
+            })}
+
+          {validSupplements.filter((supp) =>
+            supp.history?.some((entry) => entry.date === selectedDate)
+          ).length === 0 && (
+            <Text style={styles.noActivityText}>
+              No supplement activity this day
+            </Text>
+          )}
+        </View>
+
+        {/* Today's Date and Clear All */}
         <View style={styles.todayContainer}>
           <Text style={styles.todayText}>Today, {formattedDate}</Text>
+          <TouchableOpacity
+            onPress={handleClearAll}
+            style={styles.clearAllButton}
+          >
+            <Text style={styles.clearAllText}>Clear All</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
-
-        <Text style={styles.sectionTitle}>Monitor your supplement intake</Text>
-        <Text style={styles.sectionSubtitle}>
-          View your daily schedule, mark your supplements when taken
-        </Text>
-
+        {/* Current Supplements List */}
         <View style={styles.supplementsContainer}>
-          {supplements.map((supp) => {
-            if (!supp.swipeValue) return null;
-            const panResponder = createPanResponder(supp);
-            return (
-              <View key={supp.id} style={styles.supplementRow}>
-                {" "}
-                {/* Added key here */}
-                <Animated.View
-                  style={[
-                    styles.actionsContainer,
-                    {
-                      transform: [
-                        {
-                          translateX: supp.swipeValue.interpolate({
-                            inputRange: [-ACTION_WIDTH, 0],
-                            outputRange: [0, ACTION_WIDTH],
-                            extrapolate: "clamp",
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
+          {validSupplements.map((supp) => (
+            <View key={`supp-${supp.id}`} style={styles.supplementCard}>
+              <View style={styles.supplementInfo}>
+                <Text style={styles.supplementName}>{supp.name}</Text>
+                <Text style={styles.supplementDosage}>
+                  Take {supp.dosage} supplement(s)
+                </Text>
+                {supp.taken && (
+                  <Text style={styles.takenTime}>
+                    Taken at {supp.takenAt}, today
+                  </Text>
+                )}
+                {supp.skipped && (
+                  <Text style={styles.skippedText}>- Skipped today</Text>
+                )}
+              </View>
+
+              {!supp.taken && !supp.skipped ? (
+                <View style={styles.actionButtons}>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.takenButton]}
+                    style={styles.skipButton}
+                    onPress={() => handleSkip(supp.id)}
+                  >
+                    <Text style={styles.buttonText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.takeButton}
                     onPress={() => handleStatusChange(supp.id, "taken")}
                   >
-                    <Text style={styles.actionText}>Taken</Text>
+                    <Text style={styles.buttonText}>Take</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.notTakenButton]}
-                    onPress={() => handleStatusChange(supp.id, "not-taken")}
-                  >
-                    <Text style={styles.actionText}>Not Taken</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-                <Animated.View
-                  style={[
-                    styles.supplementCard,
-                    supp.taken && styles.takenSupplement,
-                    {
-                      transform: [{ translateX: supp.swipeValue }],
-                    },
-                  ]}
-                  {...panResponder.panHandlers}
-                >
-                  <View style={styles.supplementInfo}>
-                    <Text
-                      style={[
-                        styles.supplementName,
-                        supp.taken && styles.takenText,
-                      ]}
-                    >
-                      {supp.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.reminderTime,
-                        supp.taken && styles.takenText,
-                      ]}
-                    >
-                      {supp.time}
-                    </Text>
-                  </View>
-                  {supp.taken && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color="#4CAF50"
-                    />
-                  )}
-                </Animated.View>
-              </View>
-            );
-          })}
+                </View>
+              ) : supp.taken ? (
+                <Ionicons name="checkmark-circle" size={24} color="teal" />
+              ) : (
+                <Ionicons name="close-circle" size={24} color="#F44336" />
+              )}
+            </View>
+          ))}
         </View>
 
+        {/* Add Supplement Button */}
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate("SelectSupplementsScreen")}
@@ -261,180 +449,5 @@ const HomeScreen = ({ navigation, route }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#E6F9F7",
-  },
-  scrollContainer: {
-    padding: 0,
-  },
-  headerContainer: {
-    backgroundColor: "#E6F9F7",
-    padding: 20,
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  profileContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  profileAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-    backgroundColor: "#7354BF",
-  },
-  guestText: {
-    fontSize: 18,
-    color: "teal",
-    fontWeight: "600",
-  },
-  calendarContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-    paddingHorizontal: 15,
-  },
-  dayContainer: {
-    alignItems: "center",
-  },
-  dayText: {
-    fontSize: 12,
-    color: "#555",
-    marginBottom: 5,
-    fontWeight: "500",
-  },
-  dateContainer: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  currentDateContainer: {
-    backgroundColor: "#7354BF",
-  },
-  dateNumber: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#555",
-  },
-  currentDateText: {
-    color: "#FFFFFF",
-  },
-  todayContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-    paddingHorizontal: 15,
-  },
-  todayText: {
-    fontSize: 16,
-    color: "teal",
-    fontWeight: "600",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "white",
-    marginVertical: 6,
-    marginHorizontal: 15,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 5,
-    paddingHorizontal: 15,
-    color: "#7354BF",
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: "#7354BF",
-    marginBottom: 20,
-    paddingHorizontal: 15,
-  },
-  supplementsContainer: {
-    marginBottom: 20,
-    paddingHorizontal: 15,
-  },
-  supplementRow: {
-    marginBottom: 15,
-    overflow: "hidden",
-  },
-  actionsContainer: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: ACTION_WIDTH,
-    flexDirection: "row",
-  },
-  actionButton: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 10,
-  },
-  takenButton: {
-    backgroundColor: "#4CAF50",
-  },
-  notTakenButton: {
-    backgroundColor: "teal",
-  },
-  actionText: {
-    color: "white",
-    fontWeight: "bold",
-  },
-  supplementCard: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  takenSupplement: {
-    backgroundColor: "#E8F5E9",
-    borderLeftWidth: 5,
-    borderLeftColor: "#4CAF50",
-  },
-  supplementInfo: {
-    flex: 1,
-  },
-  supplementName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-  reminderTime: {
-    fontSize: 16,
-    color: "#555",
-  },
-  takenText: {
-    color: "#777",
-    textDecorationLine: "line-through",
-  },
-  addButton: {
-    backgroundColor: "teal",
-    padding: 15,
-    borderRadius: 30,
-    alignItems: "center",
-    marginTop: 320,
-    marginHorizontal: 15,
-  },
-  addButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-});
 
 export default HomeScreen;

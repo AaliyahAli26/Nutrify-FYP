@@ -1,11 +1,10 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "../Screens/HomeScreen";
-import RemindersScreen from "../Screens/RemindersScreen";
-import HistoryScreen from "../Screens/HistoryScreen";
-import ProfileScreen from "../Screens/ProfileScreen";
-import VirtualGardenScreen from "../Screens/VirtualGardenScreen";
-import HealthTestScreen from "../Screens/HealthScannerScreen";
+import SupplementSearchScreen from "../Screens/SupplementSearchScreen";
+import MoodTrackerScreen from "../Screens/MoodTrackerScreen";
+import ManageScreen from "../Screens/ManageScreen";
+import QuizScreen from "../Screens/QuizScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -13,15 +12,15 @@ export default function Tabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: "teal",
-        tabBarInactiveTintColor: "gray",
+        tabBarActiveTintColor: "#7354BF",
+        tabBarInactiveTintColor: "#D3D3F5",
         tabBarStyle: {
           backgroundColor: "white",
           borderTopWidth: 0,
           elevation: 10,
           shadowOpacity: 0.1,
           paddingBottom: 7,
-          height: 80,
+          height: 70,
         },
       }}
     >
@@ -32,21 +31,20 @@ export default function Tabs() {
           tabBarIcon: ({ color }) => (
             <Ionicons name="home" size={24} color={color} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
-        name="Dietary Advice"
-        component={RemindersScreen}
+        name="Search"
+        component={SupplementSearchScreen}
         options={{
           tabBarIcon: ({ color }) => (
-            <Ionicons name="alarm" size={24} color={color} />
+            <Ionicons name="search" size={24} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="Mood Tracker"
-        component={HistoryScreen}
+        name="Mood"
+        component={MoodTrackerScreen}
         options={{
           tabBarIcon: ({ color }) => (
             <Ionicons name="calendar" size={24} color={color} />
@@ -54,29 +52,21 @@ export default function Tabs() {
         }}
       />
       <Tab.Screen
-        name="Garden"
-        component={VirtualGardenScreen}
+        name="Quiz"
+        component={QuizScreen}
         options={{
           tabBarIcon: ({ color }) => (
-            <Ionicons name="leaf" size={24} color={color} />
+            <Ionicons name="help-circle" size={24} color={color} />
           ),
+          headerShown: false,
         }}
       />
       <Tab.Screen
-        name="Health Scan"
-        component={HealthTestScreen}
+        name="Manage"
+        component={ManageScreen}
         options={{
           tabBarIcon: ({ color }) => (
-            <Ionicons name="document-text" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="person" size={24} color={color} />
+            <Ionicons name="list" size={24} color={color} />
           ),
         }}
       />

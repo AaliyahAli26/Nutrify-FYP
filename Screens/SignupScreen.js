@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Firebase_auth, Firebase_db } from "../FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { setDoc, doc } from "firebase/firestore";
+import styles from "../Layout/SignupScreenStyles";
 
 const SignupScreen = ({ navigation }) => {
   const [username, setUsername] = useState("");
@@ -45,17 +46,24 @@ const SignupScreen = ({ navigation }) => {
       );
       const user = userCredential.user;
 
+      // Add more robust error handling for Firestore
       await setDoc(doc(Firebase_db, "users", user.uid), {
         username: username,
         email: email,
         uid: user.uid,
+        createdAt: new Date().toISOString(),
+        reminders: [],
+        settings: {},
+      }).catch((firestoreError) => {
+        console.error("Firestore error:", firestoreError);
+        throw new Error("Failed to create user profile");
       });
 
       Alert.alert("Sign Up Successful", `Welcome to Nutrify ${username}!`);
-
-      navigation.navigate("LoginScreen", { user: user });
+      navigation.navigate("LoginScreen");
     } catch (err) {
-      setError(err.message);
+      console.error("Full error:", err);
+      setError(err.message || "Signup failed. Please try again.");
     }
   };
 
@@ -142,131 +150,3 @@ const SignupScreen = ({ navigation }) => {
 };
 
 export default SignupScreen;
-
-const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-    height: "100%",
-  },
-
-  container: {
-    padding: 20,
-    backgroundColor: "rgba(210, 241, 234, 0.8)",
-    margin: 20,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#16504C",
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#16504C",
-    marginBottom: 50,
-  },
-  inputContainer: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "white",
-    marginBottom: 12,
-    justifyContent: "center",
-  },
-  input: {
-    flex: 1,
-    height: 45,
-    backgroundColor: "white",
-    paddingVertical: 12,
-  },
-  emailContainer: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "white",
-    marginBottom: 12,
-    justifyContent: "center",
-  },
-  email: {
-    flex: 1,
-    height: 45,
-    backgroundColor: "white",
-    paddingVertical: 12,
-  },
-  passwordContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "white",
-    marginBottom: 15,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingVertical: 12,
-  },
-  eyeIcon: {
-    paddingHorizontal: 4,
-  },
-  confirmContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "white",
-    marginBottom: 60,
-  },
-  confirmInput: {
-    flex: 1,
-    paddingVertical: 12,
-  },
-  signupButton: {
-    backgroundColor: "teal",
-    paddingVertical: 12,
-    paddingHorizontal: 100,
-    borderRadius: 26,
-    marginVertical: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  signupText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  footerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 18,
-  },
-  footerText: {
-    color: "#000",
-  },
-  loginLink: {
-    color: "teal",
-    fontWeight: "bold",
-  },
-});
