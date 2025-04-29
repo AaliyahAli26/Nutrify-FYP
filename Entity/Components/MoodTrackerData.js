@@ -27,7 +27,6 @@ export const symptoms = [
 ];
 
 export const supplements = [
-  // For Anxiety/Stress
   {
     id: "1",
     name: "Magnesium Glycinate",

@@ -18,11 +18,8 @@ const ConfirmScreen = ({ route, navigation }) => {
     refillData: initialRefillData,
   } = route.params || {};
   const [refillData, setRefillData] = useState(initialRefillData || null);
-  //const { supplementName, time } = route.params || {};
   const { addRefillData } = useContext(RefillContext);
   const { addSupplement } = useSupplements();
-  //const [refillData, setRefillData] = useState(null);
-  const [instructions, setInstructions] = useState("");
 
   const handleAddRefill = () => {
     navigation.navigate("AlmostDoneScreen", {
@@ -33,24 +30,29 @@ const ConfirmScreen = ({ route, navigation }) => {
   };
 
   const handleSave = async () => {
-    const supplementData = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: supplementName,
-      dosage: "1", // Make sure to get this from user input if needed
-      time,
-      instructions,
-      taken: false,
-      takenAt: null,
-      ...(refillData && { refillData }),
-    };
+    try {
+      const supplementData = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: supplementName,
+        dosage: "1",
+        time,
+        // instructions,
+        taken: false,
+        takenAt: null,
+        ...(refillData && { refillData }),
+      };
 
-    console.log("Creating supplement:", supplementData); // Debug log
+      console.log("Creating supplement:", supplementData);
 
-    await addSupplement(supplementData);
-    navigation.navigate("SuccessScreen", {
-      supplementName,
-      time,
-    });
+      await addSupplement(supplementData);
+      navigation.navigate("SuccessScreen", {
+        supplementName,
+        time,
+      });
+    } catch (error) {
+      console.error("Failed to save supplement:", error);
+      Alert.alert("Error", "Failed to save supplement");
+    }
   };
 
   return (

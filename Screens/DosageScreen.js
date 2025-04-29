@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, Image } from "react-native";
+import { Text, View, TouchableOpacity, Image } from "react-native";
 import styles from "../Layout/DosageScreenStyles";
 
 const DosageScreen = ({ route, navigation }) => {

@@ -14,7 +14,7 @@ import {
   moods,
   symptoms,
   supplements,
-} from "../Entity/Components/MoodTrackerData"; // Import constants
+} from "../Entity/Components/MoodTrackerData";
 
 const MoodTrackerScreen = () => {
   const [selectedMood, setSelectedMood] = useState(moods[0]);
@@ -25,7 +25,6 @@ const MoodTrackerScreen = () => {
   const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    // Fetch current user's ID from Firebase Auth
     const Firebase_auth = getAuth();
     const user = Firebase_auth.currentUser;
     if (user) {
@@ -57,7 +56,6 @@ const MoodTrackerScreen = () => {
     }
   };
 
-  // Function to save the mood history to AsyncStorage for the current user
   const saveHistory = async (newEntry) => {
     if (userId) {
       try {

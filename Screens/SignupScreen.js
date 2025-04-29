@@ -46,7 +46,6 @@ const SignupScreen = ({ navigation }) => {
       );
       const user = userCredential.user;
 
-      // Add more robust error handling for Firestore
       await setDoc(doc(Firebase_db, "users", user.uid), {
         username: username,
         email: email,

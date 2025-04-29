@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -13,7 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Firebase_auth } from "../FirebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import { getAuth, signOut } from "firebase/auth";
 import styles from "../Layout/LoginScreenStyles";
 

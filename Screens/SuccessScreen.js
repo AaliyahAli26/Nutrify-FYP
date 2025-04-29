@@ -21,7 +21,7 @@ const SuccessScreen = ({ navigation, route }) => {
           await addSupplement({
             name: supplementName,
             time,
-            dosage: "1", // Consider passing dosage from route.params if available
+            dosage: "1",
             id: Date.now().toString(),
           });
         }

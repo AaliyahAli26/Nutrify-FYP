@@ -11,7 +11,6 @@ import {
   ScrollView,
 } from "react-native";
 import { RefillContext } from "../Entity/Services/RefillContext";
-import { useSupplements } from "../Entity/Services/SupplementContext";
 import { getAuth } from "firebase/auth";
 import styles from "../Layout/AlmostDoneScreenStyles";
 

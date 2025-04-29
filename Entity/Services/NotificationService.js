@@ -1,7 +1,6 @@
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Basic notification handler configuration
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -9,21 +8,6 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
-
-// export const initNotifications = async () => {
-//   await Notifications.setNotificationCategoryAsync("supplementReminder", [
-//     {
-//       identifier: "TAKEN_ACTION",
-//       buttonTitle: "Taken 💊",
-//       options: { opensAppToForeground: false },
-//     },
-//     {
-//       identifier: "SNOOZE_ACTION",
-//       buttonTitle: "Snooze ⏰ (10 min)",
-//       options: { opensAppToForeground: false },
-//     },
-//   ]);
-// };
 
 export const schedulePushNotification = async (
   supplementName,
